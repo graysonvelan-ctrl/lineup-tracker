@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Lineup +/- & Rating Tracker</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#1a212b; --panel2:#222c38; --line:#2e3a48;
+    --text:#e8edf2; --muted:#9aa7b4; --a:#3b82f6; --b:#ef4444;
+    --green:#22c55e; --red:#f87171; --accent:#f59e0b;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg); color:var(--text); font-size:16px;}
+  h1,h2,h3{margin:0 0 .4em;}
+  button{font-family:inherit; cursor:pointer; border:none; border-radius:10px; color:#fff; font-weight:600;}
+  button:active{transform:scale(.97);}
+  input,select{font-family:inherit; font-size:16px; padding:8px 10px; border-radius:8px;
+       border:1px solid var(--line); background:#0c1117; color:var(--text);}
+  .wrap{max-width:1100px; margin:0 auto; padding:14px;}
+  .muted{color:var(--muted);}
+  .hidden{display:none !important;}
+  .row{display:flex; gap:10px; flex-wrap:wrap;}
+  .grow{flex:1;}
+
+  /* ---------- Setup ---------- */
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px;}
+  .teamSetup h2{display:flex; align-items:center; gap:8px;}
+  .dot{width:14px;height:14px;border-radius:50%;display:inline-block;}
+  .rosterRow{display:flex; gap:8px; margin-bottom:6px; align-items:center;}
+  .rosterRow input.num{width:64px;}
+  .rosterRow input.nm{flex:1;}
+  .rosterRow .pick{width:42px; height:38px; border-radius:8px; background:var(--panel2); color:var(--muted); font-size:13px;}
+  .rosterRow .pick.on{background:var(--green); color:#04230f;}
+  .rosterRow .del{width:38px; height:38px; background:#3a2530; color:#f1a3b3;}
+  .btn{padding:12px 16px; background:var(--accent); color:#221700; font-size:16px;}
+  .btn.primary{background:var(--green); color:#04230f;}
+  .btn.ghost{background:var(--panel2); color:var(--text);}
+  .btn.blue{background:var(--a);} .btn.redbtn{background:var(--b);}
+  label.chk{display:flex; align-items:center; gap:8px; cursor:pointer;}
+  .hint{font-size:13px; color:var(--muted); margin-top:4px;}
+
+  /* ---------- Live ---------- */
+  .topbar{position:sticky; top:0; z-index:20; background:var(--bg); padding:8px 0 10px; border-bottom:1px solid var(--line);}
+  .scoreboard{display:flex; align-items:center; justify-content:center; gap:14px; font-weight:800;}
+  .scoreboard .sc{font-size:34px; line-height:1; min-width:54px; text-align:center;}
+  .scoreboard .nm{font-size:13px; font-weight:600; color:var(--muted); text-align:center; max-width:120px;}
+  .scoreboard .vs{font-size:16px; color:var(--muted);}
+  .topActions{display:flex; gap:8px; justify-content:center; margin-top:8px; flex-wrap:wrap;}
+  .topActions button{padding:9px 14px; font-size:14px;}
+
+  .teams{display:flex; gap:12px; margin-top:12px;}
+  .panel{flex:1; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px; min-width:0;}
+  .panel.A{border-top:4px solid var(--a);}
+  .panel.B{border-top:4px solid var(--b);}
+  .panelHead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;}
+  .panelHead .tn{font-size:17px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .panelHead .pc{font-size:12px; color:var(--muted); text-align:right; white-space:nowrap;}
+  .scoreBtns{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px;}
+  .scoreBtns button{padding:18px 0; font-size:20px; background:var(--panel2);}
+  .panel.A .scoreBtns button{background:#1b2c47;} .panel.A .scoreBtns button:active{background:var(--a);}
+  .panel.B .scoreBtns button{background:#3a1f24;} .panel.B .scoreBtns button:active{background:var(--b);}
+  .possBtn{width:100%; padding:16px 0; font-size:17px; background:var(--accent); color:#221700; margin-bottom:10px;}
+  .secLabel{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:10px 0 5px;}
+  .pl{display:flex; align-items:center; gap:8px; padding:8px; border-radius:9px; background:var(--panel2); margin-bottom:5px; cursor:pointer;}
+  .pl .nbadge{font-size:12px; font-weight:700; min-width:30px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:6px; background:#0c1117; color:var(--muted);}
+  .pl .pname{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px;}
+  .pl .pm{font-size:13px; font-weight:700; min-width:34px; text-align:right;}
+  .pl.bench{opacity:.72; background:#161d26;}
+  .pl.subsel{outline:2px solid var(--accent);}
+  .pos{color:var(--green);} .neg{color:var(--red);}
+  .subhint{font-size:12px; color:var(--accent); margin:4px 0 6px; min-height:16px;}
+
+  /* ---------- Report ---------- */
+  .reportTop{display:flex; gap:8px; flex-wrap:wrap; justify-content:space-between; align-items:center; margin-bottom:12px;}
+  table{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:8px;}
+  th,td{padding:7px 8px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap;}
+  th:first-child,td:first-child,th.l,td.l{text-align:left;}
+  th{color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; position:sticky; top:0; background:var(--panel);}
+  tr.tot td{font-weight:800; border-top:2px solid var(--line);}
+  .tblWrap{overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:14px;}
+  .lineupcell{font-size:12px; white-space:normal; min-width:160px;}
+  @media (max-width:640px){
+    .teams{flex-direction:column;}
+    body{font-size:15px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ============ SETUP ============ -->
+<div id="setup">
+  <h1>Lineup +/- & Rating Tracker</h1>
+  <p class="muted" style="margin-top:-6px">Set up both teams, pick starting fives, then track live.</p>
+
+  <div id="resumeBox" class="card hidden" style="border-color:var(--accent)">
+    <strong>Unfinished game found.</strong>
+    <p class="hint">There's a saved game in progress on this device.</p>
+    <div class="row">
+      <button class="btn primary" onclick="resumeGame()">Resume game</button>
+      <button class="btn ghost" onclick="discardSave()">Discard & start new</button>
+    </div>
+  </div>
+
+  <div class="card teamSetup" id="setupA">
+    <h2><span class="dot" style="background:var(--a)"></span>Team A (your team)</h2>
+    <input class="grow" id="nameA" placeholder="Team A name" value="Home" style="width:100%; margin-bottom:10px">
+    <div id="rosterA"></div>
+    <button class="btn ghost" onclick="addRow('A')">+ Add player</button>
+    <p class="hint">Tap the <b>★</b> on five players to mark your starting lineup.</p>
+  </div>
+
+  <div class="card">
+    <label class="chk"><input type="checkbox" id="trackB" checked onchange="toggleTrackB()"> Track Team B's individual players & lineups</label>
+    <p class="hint">Leave on to get opponent lineup ratings too. Turn off to track Team B only as a team total (faster).</p>
+  </div>
+
+  <div class="card teamSetup" id="setupB">
+    <h2><span class="dot" style="background:var(--b)"></span>Team B (opponent)</h2>
+    <input class="grow" id="nameB" placeholder="Team B name" value="Away" style="width:100%; margin-bottom:10px">
+    <div id="rosterB"></div>
+    <button class="btn ghost" onclick="addRow('B')">+ Add player</button>
+    <p class="hint">Tap the <b>★</b> on five players to mark the starting lineup.</p>
+  </div>
+
+  <div class="card">
+    <button class="btn primary" style="width:100%; padding:16px; font-size:18px" onclick="startGame()">Start Game ▶</button>
+    <p id="setupErr" class="hint" style="color:var(--red)"></p>
+  </div>
+</div>
+
+<!-- ============ LIVE ============ -->
+<div id="live" class="hidden">
+  <div class="topbar">
+    <div class="scoreboard">
+      <div><div class="nm" id="lbA"></div><div class="sc" id="scA" style="color:var(--a)">0</div></div>
+      <div class="vs">–</div>
+      <div><div class="nm" id="lbB"></div><div class="sc" id="scB" style="color:var(--b)">0</div></div>
+    </div>
+    <div class="topActions">
+      <button class="btn ghost" onclick="undo()">↶ Undo</button>
+      <button class="btn primary" onclick="generate()">📊 Generate Data</button>
+      <button class="btn ghost" onclick="backToSetup()">⚙︎ Edit setup</button>
+    </div>
+  </div>
+
+  <div class="teams">
+    <div class="panel A" id="panelA"></div>
+    <div class="panel B" id="panelB"></div>
+  </div>
+  <p class="hint" style="text-align:center">Tap <b>+ Possession</b> each time that team's offensive trip ends (made basket, turnover, or defensive rebound). Offensive rebound? Keep going — don't tap it again. Tap a player to substitute.</p>
+</div>
+
+<!-- ============ REPORT ============ -->
+<div id="report" class="hidden">
+  <div class="reportTop">
+    <h1 style="margin:0">Game Data</h1>
+    <div class="row">
+      <button class="btn ghost" onclick="showLive()">◀ Back to tracking</button>
+      <button class="btn primary" onclick="downloadAll()">⤓ Download CSVs</button>
+    </div>
+  </div>
+  <div id="reportBody"></div>
+</div>
+
+</div>
+
+<script>
+/* ===================== STATE ===================== */
+let config = null;   // {names:{A,B}, players:{A:[],B:[]}, start:{A:[ids],B:[ids]}, trackB}
+let events = [];     // [{t:'pt',team,pts} | {t:'poss',team} | {t:'sub',team,out,in}]
+let setupPlayers = {A:[], B:[]}; // during setup: [{id,num,name,start}]
+let pidc = 0;
+let pendingSub = null; // {team, outId}
+const SAVE_KEY = 'lineupTrackerSave_v1';
+
+/* ===================== SETUP UI ===================== */
+function uid(){ return 'p'+(pidc++); }
+
+function addRow(team, num='', name=''){
+  setupPlayers[team].push({id:uid(), num:String(num), name:name, start:false});
+  renderRoster(team);
+}
+function renderRoster(team){
+  const host = document.getElementById('roster'+team);
+  host.innerHTML = '';
+  setupPlayers[team].forEach((p,i)=>{
+    const r = document.createElement('div'); r.className='rosterRow';
+    r.innerHTML = `
+      <input class="num" placeholder="#" value="${esc(p.num)}" onchange="setField('${team}','${p.id}','num',this.value)">
+      <input class="nm" placeholder="Player name" value="${esc(p.name)}" onchange="setField('${team}','${p.id}','name',this.value)">
+      <button class="pick ${p.start?'on':''}" title="Starter" onclick="toggleStart('${team}','${p.id}')">★</button>
+      <button class="del" onclick="delRow('${team}','${p.id}')">✕</button>`;
+    host.appendChild(r);
+  });
+}
+function setField(team,id,f,v){ const p=setupPlayers[team].find(x=>x.id===id); if(p) p[f]=v; }
+function delRow(team,id){ setupPlayers[team]=setupPlayers[team].filter(x=>x.id!==id); renderRoster(team); }
+function toggleStart(team,id){
+  const p=setupPlayers[team].find(x=>x.id===id);
+  const cur=setupPlayers[team].filter(x=>x.start).length;
+  if(!p.start && cur>=5){ alert('You already picked 5 starters for this team. Unstar one first.'); return; }
+  p.start=!p.start; renderRoster(team);
+}
+function toggleTrackB(){
+  document.getElementById('setupB').style.display = document.getElementById('trackB').checked ? '' : 'none';
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function startGame(){
+  const trackB = document.getElementById('trackB').checked;
+  const err = document.getElementById('setupErr'); err.textContent='';
+  // validate A
+  const cleanA = setupPlayers.A.filter(p=>p.name.trim()||p.num.trim());
+  if(cleanA.length<5){ err.textContent='Team A needs at least 5 players.'; return; }
+  if(cleanA.filter(p=>p.start).length!==5){ err.textContent='Pick exactly 5 starters (★) for Team A.'; return; }
+  let cleanB=[];
+  if(trackB){
+    cleanB = setupPlayers.B.filter(p=>p.name.trim()||p.num.trim());
+    if(cleanB.length<5){ err.textContent='Team B needs at least 5 players (or turn off "Track Team B players").'; return; }
+    if(cleanB.filter(p=>p.start).length!==5){ err.textContent='Pick exactly 5 starters (★) for Team B.'; return; }
+  }
+  const mk = arr => arr.map(p=>({id:p.id, num:p.num.trim(), name:p.name.trim()|| ('#'+p.num.trim())}));
+  config = {
+    names:{A:document.getElementById('nameA').value.trim()||'Home',
+           B:document.getElementById('nameB').value.trim()||'Away'},
+    players:{A:mk(cleanA), B: trackB?mk(cleanB):[]},
+    start:{A:cleanA.filter(p=>p.start).map(p=>p.id),
+           B: trackB?cleanB.filter(p=>p.start).map(p=>p.id):[]},
+    trackB
+  };
+  events=[];
+  save();
+  showLive();
+}
+
+/* ===================== ENGINE (replay) ===================== */
+function blankP(){ return {pf:0,pa:0,op:0,dp:0}; }
+function replay(){
+  const onCourt={A:[...config.start.A], B:[...config.start.B]};
+  const score={A:0,B:0};
+  const pstat={}; config.players.A.concat(config.players.B).forEach(p=>pstat[p.id]=blankP());
+  const lstat={}; // key -> {team,ids,pf,pa,op,dp}
+  const teamStat={A:blankP(), B:blankP()};
+  function lk(team){ return team+'|'+[...onCourt[team]].sort().join(','); }
+  function ensureL(team){ const k=lk(team); if(!lstat[k]) lstat[k]={team, ids:[...onCourt[team]].sort(), pf:0,pa:0,op:0,dp:0}; return lstat[k]; }
+  for(const e of events){
+    const opp = e.team==='A'?'B':'A';
+    if(e.t==='pt'){
+      score[e.team]+=e.pts;
+      teamStat[e.team].pf+=e.pts; teamStat[opp].pa+=e.pts;
+      onCourt[e.team].forEach(id=>{ if(pstat[id]) pstat[id].pf+=e.pts; });
+      onCourt[opp].forEach(id=>{ if(pstat[id]) pstat[id].pa+=e.pts; });
+      ensureL(e.team).pf+=e.pts; ensureL(opp).pa+=e.pts;
+    } else if(e.t==='poss'){
+      teamStat[e.team].op+=1; teamStat[opp].dp+=1;
+      onCourt[e.team].forEach(id=>{ if(pstat[id]) pstat[id].op+=1; });
+      onCourt[opp].forEach(id=>{ if(pstat[id]) pstat[id].dp+=1; });
+      ensureL(e.team).op+=1; ensureL(opp).dp+=1;
+    } else if(e.t==='sub'){
+      const arr=onCourt[e.team]; const i=arr.indexOf(e.out);
+      if(i>=0) arr[i]=e.in;
+    }
+  }
+  return {onCourt,score,pstat,lstat,teamStat};
+}
+
+/* ===================== LIVE ACTIONS ===================== */
+function addPt(team,pts){ events.push({t:'pt',team,pts}); afterEvent(); }
+function addPoss(team){ events.push({t:'poss',team}); afterEvent(); }
+function undo(){ if(events.length){ events.pop(); afterEvent(); } }
+function afterEvent(){ pendingSub=null; save(); renderLive(); }
+
+function clickPlayer(team,id,isBench){
+  if(!config.trackB && team==='B') return;
+  if(!isBench){ // clicked on-court -> select to sub out
+    pendingSub = (pendingSub && pendingSub.team===team && pendingSub.outId===id) ? null : {team,outId:id};
+    renderLive();
+  } else { // clicked bench -> if a sub-out is pending for same team, swap
+    if(pendingSub && pendingSub.team===team){
+      events.push({t:'sub',team,out:pendingSub.outId,in:id});
+      pendingSub=null; save(); renderLive();
+    } else {
+      pendingSub={team, outId:null, _hint:true}; // ask to pick on-court first
+      renderLive();
+    }
+  }
+}
+
+/* ===================== LIVE RENDER ===================== */
+function showLive(){ document.getElementById('setup').classList.add('hidden');
+  document.getElementById('report').classList.add('hidden');
+  document.getElementById('live').classList.remove('hidden'); renderLive(); }
+function backToSetup(){ document.getElementById('live').classList.add('hidden');
+  document.getElementById('report').classList.add('hidden');
+  document.getElementById('setup').classList.remove('hidden'); }
+
+function pm(v){ const s=(v>0?'+':'')+v; const c=v>0?'pos':(v<0?'neg':''); return `<span class="${c}">${s}</span>`; }
+
+function renderLive(){
+  const st=replay();
+  document.getElementById('lbA').textContent=config.names.A;
+  document.getElementById('lbB').textContent=config.names.B;
+  document.getElementById('scA').textContent=st.score.A;
+  document.getElementById('scB').textContent=st.score.B;
+  renderPanel('A',st); renderPanel('B',st);
+}
+function renderPanel(team,st){
+  const host=document.getElementById('panel'+team);
+  const nm=config.names[team];
+  const ts=st.teamStat[team];
+  const tracked = team==='A' || config.trackB;
+  let html = `<div class="panelHead"><div class="tn">${esc(nm)}</div>
+     <div class="pc">Off poss: <b>${ts.op}</b> · Def poss: <b>${ts.dp}</b></div></div>`;
+  html += `<div class="scoreBtns">
+     <button onclick="addPt('${team}',1)">+1</button>
+     <button onclick="addPt('${team}',2)">+2</button>
+     <button onclick="addPt('${team}',3)">+3</button></div>`;
+  html += `<button class="possBtn" onclick="addPoss('${team}')">+ Possession ▶</button>`;
+
+  if(tracked){
+    const onIds=st.onCourt[team];
+    html += `<div class="secLabel">On court (${onIds.length})</div>`;
+    if(pendingSub && pendingSub.team===team && pendingSub._hint)
+      html += `<div class="subhint">Tap an on-court player to take out ↑</div>`;
+    else if(pendingSub && pendingSub.team===team && pendingSub.outId)
+      html += `<div class="subhint">Now tap a bench player to bring in ↓</div>`;
+    else html += `<div class="subhint">&nbsp;</div>`;
+    onIds.forEach(id=>{
+      const p=playerById(team,id); const s=st.pstat[id]||blankP();
+      const sel=(pendingSub&&pendingSub.team===team&&pendingSub.outId===id)?'subsel':'';
+      html += plRow(team,p,s,false,sel);
+    });
+    const benchIds=config.players[team].map(p=>p.id).filter(id=>!onIds.includes(id));
+    if(benchIds.length){
+      html += `<div class="secLabel">Bench</div>`;
+      benchIds.forEach(id=>{ const p=playerById(team,id); const s=st.pstat[id]||blankP(); html+=plRow(team,p,s,true,''); });
+    }
+  } else {
+    html += `<div class="secLabel">Team-only mode</div><p class="hint">Individual players not tracked for ${esc(nm)}.</p>`;
+  }
+  host.innerHTML=html;
+}
+function plRow(team,p,s,bench,sel){
+  const net=s.pf-s.pa;
+  return `<div class="pl ${bench?'bench':''} ${sel}" onclick="clickPlayer('${team}','${p.id}',${bench})">
+     <span class="nbadge">${esc(p.num||'')}</span>
+     <span class="pname">${esc(p.name)}</span>
+     <span class="pm">${pm(net)}</span></div>`;
+}
+function playerById(team,id){ return config.players[team].find(p=>p.id===id)||{id,num:'?',name:'?'}; }
+
+/* ===================== REPORT ===================== */
+function rtg(pts,poss){ return poss>0 ? (pts/poss*100) : null; }
+function f1(v){ return v===null?'—':v.toFixed(1); }
+
+function generate(){
+  const st=replay();
+  let html='';
+  html += teamSummary(st);
+  html += playerTable('A',st);
+  html += lineupTable('A',st);
+  if(config.trackB){ html += playerTable('B',st); html += lineupTable('B',st); }
+  document.getElementById('reportBody').innerHTML=html;
+  document.getElementById('live').classList.add('hidden');
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('report').classList.remove('hidden');
+  window.scrollTo(0,0);
+}
+function teamSummary(st){
+  let rows='';
+  ['A','B'].forEach(t=>{
+    const s=st.teamStat[t];
+    rows+=`<tr><td class="l">${esc(config.names[t])}</td><td>${st.score[t]}</td>
+      <td>${pm(s.pf-s.pa)}</td><td>${s.op}</td><td>${s.dp}</td>
+      <td>${f1(rtg(s.pf,s.op))}</td><td>${f1(rtg(s.pa,s.dp))}</td>
+      <td>${f1(net(rtg(s.pf,s.op),rtg(s.pa,s.dp)))}</td></tr>`;
+  });
+  return `<div class="tblWrap"><h3>Team totals</h3><table>
+    <tr><th class="l">Team</th><th>Pts</th><th>+/-</th><th>Off Poss</th><th>Def Poss</th><th>ORtg</th><th>DRtg</th><th>Net</th></tr>
+    ${rows}</table></div>`;
+}
+function net(o,d){ return (o===null||d===null)?null:(o-d); }
+
+function playerTable(team,st){
+  const rows = config.players[team].map(p=>{
+    const s=st.pstat[p.id]||blankP();
+    return {p,s, net:s.pf-s.pa, o:rtg(s.pf,s.op), d:rtg(s.pa,s.dp)};
+  }).sort((a,b)=>b.net-a.net);
+  let body=rows.map(r=>`<tr>
+     <td class="l">${esc(r.p.num)}</td><td class="l">${esc(r.p.name)}</td>
+     <td>${pm(r.net)}</td><td>${r.s.pf}</td><td>${r.s.pa}</td>
+     <td>${r.s.op}</td><td>${r.s.dp}</td>
+     <td>${f1(r.o)}</td><td>${f1(r.d)}</td><td>${f1(net(r.o,r.d))}</td></tr>`).join('');
+  return `<div class="tblWrap"><h3>${esc(config.names[team])} — Players</h3><table>
+    <tr><th class="l">#</th><th class="l">Name</th><th>+/-</th><th>Pts For</th><th>Pts Agst</th>
+    <th>Off Poss</th><th>Def Poss</th><th>ORtg</th><th>DRtg</th><th>Net</th></tr>
+    ${body}</table></div>`;
+}
+function lineupTable(team,st){
+  const ls=Object.values(st.lstat).filter(l=>l.team===team)
+    .sort((a,b)=>((b.pf-b.pa))-((a.pf-a.pa)));
+  let body=ls.map(l=>{
+    const o=rtg(l.pf,l.op), d=rtg(l.pa,l.dp);
+    const names=l.ids.map(id=>{const p=playerById(team,id); return p.num?('#'+p.num):p.name;}).join(', ');
+    return `<tr><td class="l lineupcell">${esc(names)}</td>
+     <td>${pm(l.pf-l.pa)}</td><td>${l.pf}</td><td>${l.pa}</td>
+     <td>${l.op}</td><td>${l.dp}</td>
+     <td>${f1(o)}</td><td>${f1(d)}</td><td>${f1(net(o,d))}</td></tr>`;
+  }).join('');
+  return `<div class="tblWrap"><h3>${esc(config.names[team])} — Lineups (5-man units)</h3><table>
+    <tr><th class="l">Lineup</th><th>+/-</th><th>Pts For</th><th>Pts Agst</th>
+    <th>Off Poss</th><th>Def Poss</th><th>ORtg</th><th>DRtg</th><th>Net</th></tr>
+    ${body}</table>
+    <p class="hint">A "lineup" is a specific 5-man unit; a new row appears whenever the on-court five changes.</p></div>`;
+}
+
+/* ===================== CSV ===================== */
+function csvEscape(v){ v=String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function toCSV(rows){ return rows.map(r=>r.map(csvEscape).join(',')).join('\n'); }
+function download(name, text){
+  const blob=new Blob([text],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function buildPlayersCSV(st){
+  const rows=[['Team','#','Name','PtsFor','PtsAgainst','PlusMinus','OffPoss','DefPoss','ORtg','DRtg','NetRtg']];
+  ['A','B'].forEach(team=>{
+    if(team==='B' && !config.trackB) return;
+    config.players[team].forEach(p=>{
+      const s=st.pstat[p.id]||blankP(); const o=rtg(s.pf,s.op), d=rtg(s.pa,s.dp);
+      rows.push([config.names[team],p.num,p.name,s.pf,s.pa,s.pf-s.pa,s.op,s.dp,
+        o===null?'':o.toFixed(1), d===null?'':d.toFixed(1), net(o,d)===null?'':net(o,d).toFixed(1)]);
+    });
+  });
+  return toCSV(rows);
+}
+function buildLineupsCSV(st){
+  const rows=[['Team','Lineup','PtsFor','PtsAgainst','PlusMinus','OffPoss','DefPoss','ORtg','DRtg','NetRtg']];
+  Object.values(st.lstat).forEach(l=>{
+    if(l.team==='B' && !config.trackB) return;
+    const o=rtg(l.pf,l.op), d=rtg(l.pa,l.dp);
+    const names=l.ids.map(id=>{const p=playerById(l.team,id); return (p.num?('#'+p.num+' '):'')+p.name;}).join(' | ');
+    rows.push([config.names[l.team],names,l.pf,l.pa,l.pf-l.pa,l.op,l.dp,
+      o===null?'':o.toFixed(1), d===null?'':d.toFixed(1), net(o,d)===null?'':net(o,d).toFixed(1)]);
+  });
+  return toCSV(rows);
+}
+function buildTeamCSV(st){
+  const rows=[['Team','Points','PtsAgainst','PlusMinus','OffPoss','DefPoss','ORtg','DRtg','NetRtg']];
+  ['A','B'].forEach(t=>{ const s=st.teamStat[t]; const o=rtg(s.pf,s.op), d=rtg(s.pa,s.dp);
+    rows.push([config.names[t],s.pf,s.pa,s.pf-s.pa,s.op,s.dp,
+      o===null?'':o.toFixed(1), d===null?'':d.toFixed(1), net(o,d)===null?'':net(o,d).toFixed(1)]); });
+  return toCSV(rows);
+}
+function downloadAll(){
+  const st=replay();
+  const stamp=new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
+  const base=(config.names.A+'_vs_'+config.names.B+'_'+stamp).replace(/[^\w-]+/g,'_');
+  download(base+'_players.csv', buildPlayersCSV(st));
+  download(base+'_lineups.csv', buildLineupsCSV(st));
+  download(base+'_team.csv', buildTeamCSV(st));
+}
+
+/* ===================== PERSISTENCE ===================== */
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify({config,events})); }catch(e){} }
+function resumeGame(){
+  try{ const d=JSON.parse(localStorage.getItem(SAVE_KEY)); config=d.config; events=d.events||[];
+    document.getElementById('resumeBox').classList.add('hidden'); showLive(); }catch(e){ alert('Could not load save.'); }
+}
+function discardSave(){ localStorage.removeItem(SAVE_KEY); document.getElementById('resumeBox').classList.add('hidden'); }
+
+/* ===================== INIT ===================== */
+function init(){
+  // seed empty roster rows
+  for(let i=0;i<5;i++){ setupPlayers.A.push({id:uid(),num:'',name:'',start:false}); }
+  for(let i=0;i<5;i++){ setupPlayers.B.push({id:uid(),num:'',name:'',start:false}); }
+  renderRoster('A'); renderRoster('B');
+  // offer resume
+  try{ const d=localStorage.getItem(SAVE_KEY); if(d && JSON.parse(d).config){ document.getElementById('resumeBox').classList.remove('hidden'); } }catch(e){}
+}
+init();
+</script>
+</body>
+</html>
