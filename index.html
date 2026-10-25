@@ -37,7 +37,6 @@
   .btn{padding:12px 16px; background:var(--accent); color:#221700; font-size:16px;}
   .btn.primary{background:var(--green); color:#04230f;}
   .btn.ghost{background:var(--panel2); color:var(--text);}
-  .btn.blue{background:var(--a);} .btn.redbtn{background:var(--b);}
   label.chk{display:flex; align-items:center; gap:8px; cursor:pointer;}
   .hint{font-size:13px; color:var(--muted); margin-top:4px;}
 
@@ -74,11 +73,11 @@
 
   /* ---------- Report ---------- */
   .reportTop{display:flex; gap:8px; flex-wrap:wrap; justify-content:space-between; align-items:center; margin-bottom:12px;}
+  .reportTop .btn{font-size:14px; padding:10px 14px;}
   table{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:8px;}
   th,td{padding:7px 8px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap;}
   th:first-child,td:first-child,th.l,td.l{text-align:left;}
-  th{color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; position:sticky; top:0; background:var(--panel);}
-  tr.tot td{font-weight:800; border-top:2px solid var(--line);}
+  th{color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; background:var(--panel);}
   .tblWrap{overflow-x:auto; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:14px;}
   .lineupcell{font-size:12px; white-space:normal; min-width:160px;}
   @media (max-width:640px){
@@ -150,7 +149,7 @@
     <div class="panel A" id="panelA"></div>
     <div class="panel B" id="panelB"></div>
   </div>
-  <p class="hint" style="text-align:center">Tap <b>+ Possession</b> each time that team's offensive trip ends (made basket, turnover, or defensive rebound). Offensive rebound? Keep going — don't tap it again. Tap a player to substitute.</p>
+  <p class="hint" style="text-align:center">Tap <b>+ Possession</b> each time that team's offensive trip ends (made basket, turnover, or defensive rebound). Offensive rebound? Keep going, don't tap it again. Tap a player to substitute.</p>
 </div>
 
 <!-- ============ REPORT ============ -->
@@ -159,7 +158,10 @@
     <h1 style="margin:0">Game Data</h1>
     <div class="row">
       <button class="btn ghost" onclick="showLive()">◀ Back to tracking</button>
-      <button class="btn primary" onclick="downloadAll()">⤓ Download CSVs</button>
+      <button class="btn primary" onclick="downloadAll()">⤓ Download all data (1 file)</button>
+      <button class="btn ghost" onclick="downloadOne('team')">Team CSV</button>
+      <button class="btn ghost" onclick="downloadOne('players')">Players CSV</button>
+      <button class="btn ghost" onclick="downloadOne('lineups')">Lineups CSV</button>
     </div>
   </div>
   <div id="reportBody"></div>
@@ -171,13 +173,13 @@
 /* ===================== STATE ===================== */
 let config = null;   // {names:{A,B}, players:{A:[],B:[]}, start:{A:[ids],B:[ids]}, trackB}
 let events = [];     // [{t:'pt',team,pts} | {t:'poss',team} | {t:'sub',team,out,in}]
-let setupPlayers = {A:[], B:[]}; // during setup: [{id,num,name,start}]
+let setupPlayers = {A:[], B:[]};
 let pidc = 0;
-let pendingSub = null; // {team, outId}
+let pendingSub = null;
 const SAVE_KEY = 'lineupTrackerSave_v1';
 
 /* ===================== SETUP UI ===================== */
-function uid(){ return 'p'+(pidc++); }
+function uid(){ return 'p'+Date.now().toString(36)+(pidc++); }
 
 function addRow(team, num='', name=''){
   setupPlayers[team].push({id:uid(), num:String(num), name:name, start:false});
@@ -186,7 +188,7 @@ function addRow(team, num='', name=''){
 function renderRoster(team){
   const host = document.getElementById('roster'+team);
   host.innerHTML = '';
-  setupPlayers[team].forEach((p,i)=>{
+  setupPlayers[team].forEach(p=>{
     const r = document.createElement('div'); r.className='rosterRow';
     r.innerHTML = `
       <input class="num" placeholder="#" value="${esc(p.num)}" onchange="setField('${team}','${p.id}','num',this.value)">
@@ -212,7 +214,6 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function startGame(){
   const trackB = document.getElementById('trackB').checked;
   const err = document.getElementById('setupErr'); err.textContent='';
-  // validate A
   const cleanA = setupPlayers.A.filter(p=>p.name.trim()||p.num.trim());
   if(cleanA.length<5){ err.textContent='Team A needs at least 5 players.'; return; }
   if(cleanA.filter(p=>p.start).length!==5){ err.textContent='Pick exactly 5 starters (★) for Team A.'; return; }
@@ -242,7 +243,7 @@ function replay(){
   const onCourt={A:[...config.start.A], B:[...config.start.B]};
   const score={A:0,B:0};
   const pstat={}; config.players.A.concat(config.players.B).forEach(p=>pstat[p.id]=blankP());
-  const lstat={}; // key -> {team,ids,pf,pa,op,dp}
+  const lstat={};
   const teamStat={A:blankP(), B:blankP()};
   function lk(team){ return team+'|'+[...onCourt[team]].sort().join(','); }
   function ensureL(team){ const k=lk(team); if(!lstat[k]) lstat[k]={team, ids:[...onCourt[team]].sort(), pf:0,pa:0,op:0,dp:0}; return lstat[k]; }
@@ -275,15 +276,15 @@ function afterEvent(){ pendingSub=null; save(); renderLive(); }
 
 function clickPlayer(team,id,isBench){
   if(!config.trackB && team==='B') return;
-  if(!isBench){ // clicked on-court -> select to sub out
+  if(!isBench){
     pendingSub = (pendingSub && pendingSub.team===team && pendingSub.outId===id) ? null : {team,outId:id};
     renderLive();
-  } else { // clicked bench -> if a sub-out is pending for same team, swap
-    if(pendingSub && pendingSub.team===team){
+  } else {
+    if(pendingSub && pendingSub.team===team && pendingSub.outId){
       events.push({t:'sub',team,out:pendingSub.outId,in:id});
       pendingSub=null; save(); renderLive();
     } else {
-      pendingSub={team, outId:null, _hint:true}; // ask to pick on-court first
+      pendingSub={team, outId:null, _hint:true};
       renderLive();
     }
   }
@@ -355,6 +356,7 @@ function playerById(team,id){ return config.players[team].find(p=>p.id===id)||{i
 /* ===================== REPORT ===================== */
 function rtg(pts,poss){ return poss>0 ? (pts/poss*100) : null; }
 function f1(v){ return v===null?'—':v.toFixed(1); }
+function net(o,d){ return (o===null||d===null)?null:(o-d); }
 
 function generate(){
   const st=replay();
@@ -382,8 +384,6 @@ function teamSummary(st){
     <tr><th class="l">Team</th><th>Pts</th><th>+/-</th><th>Off Poss</th><th>Def Poss</th><th>ORtg</th><th>DRtg</th><th>Net</th></tr>
     ${rows}</table></div>`;
 }
-function net(o,d){ return (o===null||d===null)?null:(o-d); }
-
 function playerTable(team,st){
   const rows = config.players[team].map(p=>{
     const s=st.pstat[p.id]||blankP();
@@ -414,26 +414,26 @@ function lineupTable(team,st){
     <tr><th class="l">Lineup</th><th>+/-</th><th>Pts For</th><th>Pts Agst</th>
     <th>Off Poss</th><th>Def Poss</th><th>ORtg</th><th>DRtg</th><th>Net</th></tr>
     ${body}</table>
-    <p class="hint">A "lineup" is a specific 5-man unit; a new row appears whenever the on-court five changes.</p></div>`;
+    <p class="hint">A new lineup row appears whenever the on-court five changes.</p></div>`;
 }
 
 /* ===================== CSV ===================== */
 function csvEscape(v){ v=String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
 function toCSV(rows){ return rows.map(r=>r.map(csvEscape).join(',')).join('\n'); }
 function download(name, text){
-  const blob=new Blob([text],{type:'text/csv;charset=utf-8;'});
+  const blob=new Blob(['﻿'+text],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
+const r1=v=>v===null?'':v.toFixed(1);
 function buildPlayersCSV(st){
   const rows=[['Team','#','Name','PtsFor','PtsAgainst','PlusMinus','OffPoss','DefPoss','ORtg','DRtg','NetRtg']];
   ['A','B'].forEach(team=>{
     if(team==='B' && !config.trackB) return;
     config.players[team].forEach(p=>{
       const s=st.pstat[p.id]||blankP(); const o=rtg(s.pf,s.op), d=rtg(s.pa,s.dp);
-      rows.push([config.names[team],p.num,p.name,s.pf,s.pa,s.pf-s.pa,s.op,s.dp,
-        o===null?'':o.toFixed(1), d===null?'':d.toFixed(1), net(o,d)===null?'':net(o,d).toFixed(1)]);
+      rows.push([config.names[team],p.num,p.name,s.pf,s.pa,s.pf-s.pa,s.op,s.dp,r1(o),r1(d),r1(net(o,d))]);
     });
   });
   return toCSV(rows);
@@ -444,25 +444,30 @@ function buildLineupsCSV(st){
     if(l.team==='B' && !config.trackB) return;
     const o=rtg(l.pf,l.op), d=rtg(l.pa,l.dp);
     const names=l.ids.map(id=>{const p=playerById(l.team,id); return (p.num?('#'+p.num+' '):'')+p.name;}).join(' | ');
-    rows.push([config.names[l.team],names,l.pf,l.pa,l.pf-l.pa,l.op,l.dp,
-      o===null?'':o.toFixed(1), d===null?'':d.toFixed(1), net(o,d)===null?'':net(o,d).toFixed(1)]);
+    rows.push([config.names[l.team],names,l.pf,l.pa,l.pf-l.pa,l.op,l.dp,r1(o),r1(d),r1(net(o,d))]);
   });
   return toCSV(rows);
 }
 function buildTeamCSV(st){
   const rows=[['Team','Points','PtsAgainst','PlusMinus','OffPoss','DefPoss','ORtg','DRtg','NetRtg']];
   ['A','B'].forEach(t=>{ const s=st.teamStat[t]; const o=rtg(s.pf,s.op), d=rtg(s.pa,s.dp);
-    rows.push([config.names[t],s.pf,s.pa,s.pf-s.pa,s.op,s.dp,
-      o===null?'':o.toFixed(1), d===null?'':d.toFixed(1), net(o,d)===null?'':net(o,d).toFixed(1)]); });
+    rows.push([config.names[t],s.pf,s.pa,s.pf-s.pa,s.op,s.dp,r1(o),r1(d),r1(net(o,d))]); });
   return toCSV(rows);
 }
+function fileBase(){
+  const stamp=new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
+  return (config.names.A+'_vs_'+config.names.B+'_'+stamp).replace(/[^\w-]+/g,'_');
+}
+// One file with all three sections (browsers block several automatic downloads at once)
 function downloadAll(){
   const st=replay();
-  const stamp=new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
-  const base=(config.names.A+'_vs_'+config.names.B+'_'+stamp).replace(/[^\w-]+/g,'_');
-  download(base+'_players.csv', buildPlayersCSV(st));
-  download(base+'_lineups.csv', buildLineupsCSV(st));
-  download(base+'_team.csv', buildTeamCSV(st));
+  const text='TEAM TOTALS\n'+buildTeamCSV(st)+'\n\nPLAYERS\n'+buildPlayersCSV(st)+'\n\nLINEUPS\n'+buildLineupsCSV(st);
+  download(fileBase()+'_all.csv', text);
+}
+function downloadOne(which){
+  const st=replay();
+  const fn={team:buildTeamCSV,players:buildPlayersCSV,lineups:buildLineupsCSV}[which];
+  download(fileBase()+'_'+which+'.csv', fn(st));
 }
 
 /* ===================== PERSISTENCE ===================== */
@@ -471,15 +476,13 @@ function resumeGame(){
   try{ const d=JSON.parse(localStorage.getItem(SAVE_KEY)); config=d.config; events=d.events||[];
     document.getElementById('resumeBox').classList.add('hidden'); showLive(); }catch(e){ alert('Could not load save.'); }
 }
-function discardSave(){ localStorage.removeItem(SAVE_KEY); document.getElementById('resumeBox').classList.add('hidden'); }
+function discardSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} document.getElementById('resumeBox').classList.add('hidden'); }
 
 /* ===================== INIT ===================== */
 function init(){
-  // seed empty roster rows
   for(let i=0;i<5;i++){ setupPlayers.A.push({id:uid(),num:'',name:'',start:false}); }
   for(let i=0;i<5;i++){ setupPlayers.B.push({id:uid(),num:'',name:'',start:false}); }
   renderRoster('A'); renderRoster('B');
-  // offer resume
   try{ const d=localStorage.getItem(SAVE_KEY); if(d && JSON.parse(d).config){ document.getElementById('resumeBox').classList.remove('hidden'); } }catch(e){}
 }
 init();
